@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Табель</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Табель">
+<meta name="theme-color" content="#EEF1EC">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&display=swap">
+</head>
+<body>
+<style>
+/* Layout: month bar, employee tabs, balance slab, calendar grid, day-grouped entries, floating add button */
+:root{
+  --bg:#EEF1EC; --surface:#FFFFFF; --fg:#17201B; --muted:#66706A; --line:#DCE1DA;
+  --accent:#1F7A46; --accent-fg:#FFFFFF; --in:#1F7A46; --out:#BE3A26; --chip:#E3E8E1;
+  --display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --body:"Golos Text",-apple-system,system-ui,"Segoe UI",sans-serif;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111613; --surface:#1A211D; --fg:#E8EEE9; --muted:#97A39B; --line:#2A332E;
+  --accent:#5CCB8A; --accent-fg:#0E1330; --in:#5CCB8A; --out:#FF8A73; --chip:#242C27; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#1A211D; --fg:#E8EEE9; --muted:#97A39B; --line:#2A332E;
+  --accent:#5CCB8A; --accent-fg:#0E1330; --in:#5CCB8A; --out:#FF8A73; --chip:#242C27; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap-highlight-color:transparent;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 120px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.monthbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.monthbar h1{font:700 19px/1.2 var(--display);margin:0;text-transform:lowercase;letter-spacing:-.01em}
+.monthbar h1 span{color:var(--muted);font-weight:500}
+.iconbtn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:18px;display:grid;place-items:center}
+
+.emptabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;-ms-overflow-style:none}
+.emptabs::-webkit-scrollbar{display:none}
+.emptabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
+.emptabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+.slab{background:var(--fg);color:var(--bg);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.slab .lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.65}
+.slab .big{font:700 clamp(28px,8.5vw,38px)/1.05 var(--display);letter-spacing:-.02em}
+.slab .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid color-mix(in srgb,var(--bg) 18%,transparent);padding-top:14px}
+.slab .row b{display:block;font:600 17px/1.2 var(--body)}
+.slab .tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-size:11px;letter-spacing:.06em}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+
+section h2{font:500 12px/1 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+
+.calsec{display:flex;flex-direction:column;gap:8px}
+.calwd{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;text-align:center}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calcell{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid var(--line);background:var(--surface);font-size:13px;padding:0}
+.calcell.blank{background:none;border:0}
+.calcell.today{border-color:var(--accent);border-width:2px}
+.calcell[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.calcell .dots{display:flex;gap:2px;align-items:center;min-height:6px}
+.calcell .dots i{width:5px;height:5px;border-radius:50%;display:block}
+.calcell .more{font-size:8px;color:var(--muted)}
+.calcell[aria-pressed="true"] .more{color:var(--bg);opacity:.7}
+
+.example{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--chip);border-radius:14px;padding:10px 14px;font-size:13px;color:var(--muted)}
+.example button{border:0;background:none;color:var(--accent);font-weight:600;padding:4px}
+
+.day{display:flex;flex-direction:column}
+.dayhead{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:12px 2px 6px;border-bottom:1px solid var(--line)}
+.tx{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:12px;padding:10px 2px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;width:100%}
+.tx .ic{width:38px;height:38px;border-radius:12px;color:#fff;display:grid;place-items:center;font:600 13px var(--display)}
+.tx .ic.pay{background:var(--chip);color:var(--fg)}
+.tx .t{min-width:0}
+.tx .t b{display:block;font-weight:500}
+.tx .t small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amt-in{color:var(--in)}
+.tx .amt{font-weight:600}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+
+.emplist{display:flex;flex-direction:column}
+.emprow{display:flex;align-items:center;gap:12px;padding:10px 2px;border:0;border-bottom:1px solid var(--line);background:none;width:100%;text-align:left}
+.emprow .ic{width:38px;height:38px;border-radius:12px;color:#fff;display:grid;place-items:center;font:600 13px var(--display);flex:0 0 auto}
+.emprow .t{min-width:0;flex:1}
+.emprow .t b{display:block;font-weight:500}
+.emprow .t small{display:block;color:var(--muted);font-size:13px}
+.emprow .t small.bal{font-weight:600}
+
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+.ghost{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 14px;font-size:14px}
+.ghost.danger{color:var(--out)}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  border:0;border-radius:999px;background:var(--accent);color:var(--accent-fg);padding:15px 28px;font:600 16px var(--body);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 35%,transparent);z-index:5}
+
+.scrim{position:fixed;inset:0;background:color-mix(in srgb,#000 40%,transparent);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:22px 22px 0 0;max-height:92%;overflow:auto;
+  padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:14px}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
+.sheet h3{margin:0;font:700 17px var(--display)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--chip);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:none;border-radius:9px;padding:9px;font-weight:600;color:var(--muted);font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px #0002}
+.seg3{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--chip);border-radius:12px;padding:4px;gap:4px}
+.seg3 button{border:0;background:none;border-radius:9px;padding:9px 4px;font-weight:600;color:var(--muted);font-size:12.5px}
+.seg3 button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px #0002}
+.amountin{display:flex;align-items:baseline;gap:8px;border-bottom:2px solid var(--line);padding-bottom:4px}
+.amountin input{border:0;background:none;font:700 34px var(--display);width:100%;min-width:0;color:var(--fg);padding:0}
+.amountin input:focus{outline:none}
+.amountin:focus-within{border-color:var(--accent)}
+.amountin span{font:500 22px var(--display);color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:none;border-radius:999px;padding:7px 12px;font-size:14px}
+.chips button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.field input,.field textarea{font:16px var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 12px;width:100%;text-transform:none;letter-spacing:0}
+.field textarea{resize:vertical;font:15px var(--body)}
+.ratehint{color:var(--muted);font-size:13px;margin:-8px 0 0}
+.timepair{display:flex;align-items:center;gap:8px}
+.timepair input{flex:1}
+.ivaline{font-size:13px;color:var(--muted);text-transform:none;letter-spacing:0;display:block;margin-top:2px}
+.earnline{font-weight:600;font-size:15px;margin:0}
+.actions{display:flex;gap:8px}
+.primary{flex:1;border:0;border-radius:14px;background:var(--accent);color:var(--accent-fg);padding:14px;font-weight:600;font-size:16px}
+.err{color:var(--out);font-size:13px;min-height:1em;margin:0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:30}
+</style>
+
+<div class="wrap">
+  <header class="monthbar">
+    <button class="iconbtn" id="prev" aria-label="Предыдущий месяц">‹</button>
+    <h1 id="mtitle"></h1>
+    <button class="iconbtn" id="next" aria-label="Следующий месяц">›</button>
+  </header>
+
+  <div class="emptabs" id="empTabs" role="group" aria-label="Сотрудник"></div>
+
+  <div class="slab" id="slab"></div>
+
+  <section class="calsec">
+    <h2>Календарь</h2>
+    <div class="calwd" id="calwd"></div>
+    <div class="calgrid" id="calgrid"></div>
+    <button class="ghost" id="clearDay" hidden>Показать весь месяц</button>
+  </section>
+
+  <div class="example" id="exbanner" hidden><span>Это примерные записи, чтобы показать, как всё выглядит.</span><button id="clearex">Убрать</button></div>
+
+  <section><h2>Записи</h2><div id="list"></div></section>
+
+  <section>
+    <h2>Сотрудники</h2>
+    <div class="emplist" id="empList"></div>
+    <button class="ghost" id="addEmp" style="margin-top:8px">+ Добавить сотрудника</button>
+  </section>
+
+  <section>
+    <h2>Данные</h2>
+    <div class="tools">
+      <button class="ghost" id="csv">Скачать CSV</button>
+      <button class="ghost" id="copy">Копировать резервную копию</button>
+      <button class="ghost" id="imp">Восстановить</button>
+      <button class="ghost danger" id="wipe">Удалить всё</button>
+    </div>
+    <p class="note">Все записи хранятся только на этом телефоне. Время от времени делайте резервную копию.</p>
+  </section>
+</div>
+
+<button class="fab" id="add">+ Добавить</button>
+<div class="scrim" id="scrim" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const KEY="tabel.v1";
+const fmt=new Intl.NumberFormat("ru-RU",{style:"currency",currency:"EUR",maximumFractionDigits:2,minimumFractionDigits:2});
+const money=c=>fmt.format(c/100);
+const MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+const MGEN=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+const WDTAG=["вс","пн","вт","ср","чт","пт","сб"];
+const WDCAL=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+const PALETTE=["#2B44C9","#BE3A26","#9A5300","#6B3FA0","#0E7C86","#C9348B","#4C7A1F"];
+const SELF_COLOR="#17201B";
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const parseNum=v=>{const n=parseFloat(String(v==null?"":v).replace(/\s/g,"").replace(",",".")); return isFinite(n)?n:0};
+const fmtHours=h=>{h=Math.round((h||0)*100)/100; let s=Math.round(h*10)/10; s=Number.isInteger(s)?String(s):s.toFixed(1).replace(".",","); return s+"ч"};
+const fmtMin=min=>{min=Math.round(min||0); if(min<60) return min+"м"; const h=Math.floor(min/60),m=min%60; return h+"ч"+(m?" "+m+"м":"")};
+
+function defaultSelf(){return {id:"self",name:"Я",payType:"none",rate:0,isSelf:true,color:SELF_COLOR}}
+
+let db={employees:[],entries:[],payments:[],example:false,filter:"all"};
+function load(){
+  try{
+    const r=localStorage.getItem(KEY);
+    if(r){
+      const o=JSON.parse(r);
+      db.employees=Array.isArray(o.employees)?o.employees:[];
+      db.entries=Array.isArray(o.entries)?o.entries:[];
+      db.payments=Array.isArray(o.payments)?o.payments:[];
+      db.example=!!o.example;
+      db.filter=o.filter||"all";
+      if(!db.employees.find(e=>e.isSelf)) db.employees.unshift(defaultSelf());
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){toast("Не удалось сохранить на устройстве")}}
+
+function seed(){
+  const self=defaultSelf();
+  const e1={id:uid(),name:"Хуан",payType:"day",rate:8000,isSelf:false,color:PALETTE[0]};
+  const e2={id:uid(),name:"Мигель",payType:"hour",rate:1200,isSelf:false,color:PALETTE[1]};
+  const d=new Date(),y=d.getFullYear(),m=d.getMonth()+1,D=n=>y+"-"+pad(m)+"-"+pad(Math.max(1,Math.min(n,d.getDate())));
+  const entries=[
+    {id:uid(),employeeId:e1.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Демонтаж старой плитки",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20},
+    {id:uid(),employeeId:e1.id,date:D(2),address:"Calle Mayor 12, Elche",desc:"Укладка плитки, ванная",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20},
+    {id:uid(),employeeId:e2.id,date:D(1),address:"Av. del Mar 5, San Juan",desc:"Электрика, разводка",hours:7.5,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:15},
+    {id:uid(),employeeId:e2.id,date:D(3),address:"Av. del Mar 5, San Juan",desc:"Розетки и щиток",hours:8,hoursMode:"clock",timeIn:"08:00",timeOut:"17:00",lunchMin:30,travelMin:15},
+    {id:uid(),employeeId:self.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Закупка материалов, контроль работ",hours:3,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:40}
+  ];
+  const payments=[{id:uid(),employeeId:e1.id,date:D(2),amount:8000,note:"Аванс"}];
+  db={employees:[self,e1,e2],entries,payments,example:true,filter:"all"};
+}
+if(!load()) seed();
+
+let cur=new Date(); cur.setDate(1);
+let selectedDay=null;
+const ym=()=>cur.getFullYear()+"-"+pad(cur.getMonth()+1);
+const td=today();
+
+function empById(id){return db.employees.find(e=>e.id===id)}
+function employeesSorted(){const self=db.employees.find(e=>e.isSelf);const others=db.employees.filter(e=>!e.isSelf);return self?[self,...others]:others}
+function empLabel(e){return e.isSelf?"Я":e.name}
+function earnings(emp,entry){if(!emp) return 0; if(emp.payType==="day") return emp.rate; if(emp.payType==="hour") return Math.round(emp.rate*(entry.hours||0)); return 0}
+function allAccrued(id){const emp=empById(id); if(!emp) return 0; return db.entries.filter(e=>e.employeeId===id).reduce((s,e)=>s+earnings(emp,e),0)}
+function allPaid(id){return db.payments.filter(p=>p.employeeId===id).reduce((s,p)=>s+p.amount,0)}
+function monthEntries(){return db.entries.filter(e=>e.date.slice(0,7)===ym())}
+function monthPayments(){return db.payments.filter(p=>p.date.slice(0,7)===ym())}
+function nextColor(){const n=db.employees.filter(e=>!e.isSelf).length; return PALETTE[n%PALETTE.length]}
+function recentAddresses(){const seen=new Set();const out=[];db.entries.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{if(e.address&&!seen.has(e.address)){seen.add(e.address);out.push(e.address)}});return out.slice(0,6)}
+
+function render(){
+  $("mtitle").innerHTML=MONTHS[cur.getMonth()]+" <span>"+cur.getFullYear()+"</span>";
+  renderTabs();
+  renderSlab();
+  renderCalendar();
+  $("exbanner").hidden=!db.example;
+  renderList();
+  renderEmpList();
+}
+
+function renderTabs(){
+  const emps=employeesSorted();
+  $("empTabs").innerHTML=`<button data-f="all" aria-pressed="${db.filter==="all"}">Все</button>`+
+    emps.map(e=>`<button data-f="${e.id}" aria-pressed="${db.filter===e.id}">${esc(empLabel(e))}</button>`).join("");
+}
+
+function renderSlab(){
+  const slab=$("slab");
+  if(db.filter==="all"){
+    const mE=monthEntries(), mP=monthPayments();
+    let accM=0; mE.forEach(e=>{const emp=empById(e.employeeId); if(emp) accM+=earnings(emp,e)});
+    const paidM=mP.reduce((s,p)=>s+p.amount,0);
+    let totalBalance=0; db.employees.forEach(emp=>{totalBalance+=allAccrued(emp.id)-allPaid(emp.id)});
+    slab.innerHTML=`<div><div class="lbl">Остаток к выплате<span class="tag">ВСЕ</span></div><div class="big num" style="color:${totalBalance>0?"var(--out)":"var(--in)"}">${money(totalBalance)}</div></div>
+      <div class="row">
+        <div><span class="lbl"><span class="dot" style="background:var(--in)"></span>Начислено</span><b class="num">${money(accM)}</b></div>
+        <div><span class="lbl"><span class="dot" style="background:var(--out)"></span>Выплачено</span><b class="num">${money(paidM)}</b></div>
+      </div>`;
+    return;
+  }
+  const emp=empById(db.filter);
+  if(!emp){db.filter="all";renderSlab();return}
+  if(emp.payType==="none"){
+    const mE=monthEntries().filter(e=>e.employeeId===emp.id);
+    const days=new Set(mE.map(e=>e.date)).size;
+    const hours=mE.reduce((s,e)=>s+(e.hours||0),0);
+    const travel=mE.reduce((s,e)=>s+(e.travelMin||0),0);
+    slab.innerHTML=`<div><div class="lbl">Рабочих дней<span class="tag">${esc(empLabel(emp)).toUpperCase()}</span></div><div class="big num">${days}</div></div>
+      <div class="row">
+        <div><span class="lbl">Часов за месяц</span><b class="num">${fmtHours(hours)}</b></div>
+        <div><span class="lbl">В дороге</span><b class="num">${fmtMin(travel)}</b></div>
+      </div>`;
+    return;
+  }
+  const accM=monthEntries().filter(e=>e.employeeId===emp.id).reduce((s,e)=>s+earnings(emp,e),0);
+  const paidM=monthPayments().filter(p=>p.employeeId===emp.id).reduce((s,p)=>s+p.amount,0);
+  const balance=allAccrued(emp.id)-allPaid(emp.id);
+  slab.innerHTML=`<div><div class="lbl">Баланс<span class="tag">${esc(empLabel(emp)).toUpperCase()}</span></div><div class="big num" style="color:${balance>0?"var(--out)":"var(--in)"}">${money(balance)}</div></div>
+    <div class="row">
+      <div><span class="lbl"><span class="dot" style="background:var(--in)"></span>Начислено за мес.</span><b class="num">${money(accM)}</b></div>
+      <div><span class="lbl"><span class="dot" style="background:var(--out)"></span>Выплачено за мес.</span><b class="num">${money(paidM)}</b></div>
+    </div>`;
+}
+
+function renderCalendar(){
+  const y=cur.getFullYear(), m=cur.getMonth();
+  $("calwd").innerHTML=WDCAL.map(w=>`<div>${w}</div>`).join("");
+  const first=new Date(y,m,1);
+  const startOffset=(first.getDay()+6)%7;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const relevant=db.entries.filter(e=>db.filter==="all"||e.employeeId===db.filter);
+  const byDate={};
+  relevant.forEach(e=>{(byDate[e.date]=byDate[e.date]||new Set()).add(e.employeeId)});
+  let html="";
+  for(let i=0;i<startOffset;i++) html+=`<div class="calcell blank"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const ds=y+"-"+pad(m+1)+"-"+pad(d);
+    const emps=[...(byDate[ds]||[])];
+    const dots=emps.slice(0,3).map(id=>{const e=empById(id);return `<i style="background:${e?e.color:"var(--muted)"}"></i>`}).join("");
+    const extra=emps.length>3?`<span class="more">+${emps.length-3}</span>`:"";
+    html+=`<button class="calcell${ds===td?" today":""}" data-date="${ds}" aria-pressed="${selectedDay===ds}"><span class="num">${d}</span><span class="dots">${dots}${extra}</span></button>`;
+  }
+  const trail=(7-((startOffset+daysInMonth)%7))%7;
+  for(let i=0;i<trail;i++) html+=`<div class="calcell blank"></div>`;
+  $("calgrid").innerHTML=html;
+  $("clearDay").hidden=!selectedDay;
+}
+
+function renderList(){
+  let entries=monthEntries().filter(e=>db.filter==="all"||e.employeeId===db.filter);
+  let payments=monthPayments().filter(p=>db.filter==="all"||p.employeeId===db.filter);
+  if(selectedDay){entries=entries.filter(e=>e.date===selectedDay); payments=payments.filter(p=>p.date===selectedDay)}
+  if(!entries.length&&!payments.length){$("list").innerHTML=`<div class="empty">Нет записей ${selectedDay?"за этот день":"за этот месяц"}.</div>`;return}
+  const days={};
+  entries.forEach(e=>{(days[e.date]=days[e.date]||{rec:[],pay:[]}).rec.push(e)});
+  payments.forEach(p=>{(days[p.date]=days[p.date]||{rec:[],pay:[]}).pay.push(p)});
+  const keys=Object.keys(days).sort((a,b)=>b.localeCompare(a));
+  $("list").innerHTML=keys.map(d=>{
+    const dt=new Date(d+"T12:00");
+    const label=d===td?"Сегодня":dt.getDate()+" "+MGEN[dt.getMonth()]+", "+WDTAG[dt.getDay()];
+    const recHtml=days[d].rec.map(e=>{
+      const emp=empById(e.employeeId); if(!emp) return "";
+      const title=db.filter==="all"?esc(empLabel(emp)):(e.address?esc(e.address):"Без адреса");
+      const sub1=db.filter==="all"?(e.address?esc(e.address):"Без адреса"):(e.desc?esc(e.desc.slice(0,70)):"");
+      const hourBit=emp.payType==="day"?"":(e.hours?fmtHours(e.hours):"");
+      const travelBit=e.travelMin?"дорога "+fmtMin(e.travelMin):"";
+      const sub2=[hourBit,travelBit].filter(Boolean).join(" · ");
+      const amt=emp.payType!=="none"?money(earnings(emp,e)):(e.hours?fmtHours(e.hours):"—");
+      return `<button class="tx" data-kind="entry" data-id="${e.id}"><span class="ic" style="background:${emp.color}">${esc(empLabel(emp).slice(0,2))}</span>
+        <span class="t"><b>${title}</b>${sub1?`<small>${sub1}</small>`:""}${sub2?`<small>${sub2}</small>`:""}</span>
+        <span class="amt num">${amt}</span></button>`;
+    }).join("");
+    const payHtml=days[d].pay.map(p=>{
+      const emp=empById(p.employeeId);
+      const title="Оплата"+(db.filter==="all"&&emp?" — "+esc(empLabel(emp)):"");
+      return `<button class="tx" data-kind="pay" data-id="${p.id}"><span class="ic pay">€</span>
+        <span class="t"><b>${title}</b>${p.note?`<small>${esc(p.note)}</small>`:""}</span>
+        <span class="amt num amt-in">${money(p.amount)}</span></button>`;
+    }).join("");
+    return `<div class="day"><div class="dayhead"><span>${label}</span></div>${recHtml}${payHtml}</div>`;
+  }).join("");
+}
+
+function renderEmpList(){
+  $("empList").innerHTML=employeesSorted().map(emp=>{
+    const bal=allAccrued(emp.id)-allPaid(emp.id);
+    const sub=emp.payType==="day"?money(emp.rate)+"/день":emp.payType==="hour"?money(emp.rate)+"/час":"без оплаты";
+    const balBit=emp.payType!=="none"?`<small class="bal num" style="color:${bal>0?"var(--out)":"var(--in)"}">${bal===0?"Расчёт закрыт":"Долг: "+money(bal)}</small>`:"";
+    return `<button class="emprow" data-id="${emp.id}"><span class="ic" style="background:${emp.color}">${esc(empLabel(emp).slice(0,2))}</span>
+      <span class="t"><b>${esc(empLabel(emp))}</b><small>${sub}</small>${balBit}</span></button>`;
+  }).join("");
+}
+
+function close(){const sc=$("scrim");sc.hidden=true;sc.innerHTML=""}
+let tt;function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,1800)}
+
+function openAddChooser(){
+  const sc=$("scrim");sc.hidden=false;
+  sc.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Добавить"><h3>Что добавить?</h3>
+    <div class="actions" style="flex-direction:column">
+      <button class="primary" id="chWork">Рабочий день</button>
+      <button class="ghost" id="chPay">Оплата сотруднику</button>
+      <button class="ghost" id="chCancel">Отмена</button>
+    </div></div>`;
+  $("chWork").onclick=()=>{close();openEntrySheet(null)};
+  $("chPay").onclick=()=>{close();openPaySheet(null)};
+  $("chCancel").onclick=close;
+  sc.onclick=e=>{if(e.target===sc)close()};
+}
+
+function openEntrySheet(entry){
+  const edit=!!entry;
+  let employeeId=entry?entry.employeeId:(db.filter!=="all"?db.filter:(employeesSorted()[0]?employeesSorted()[0].id:"self"));
+  let date=entry?entry.date:(selectedDay||today());
+  let hoursMode=entry?(entry.hoursMode||"manual"):"manual";
+  let hours=entry?entry.hours:null;
+  let timeIn=entry&&entry.timeIn?entry.timeIn:"08:00";
+  let timeOut=entry&&entry.timeOut?entry.timeOut:"16:00";
+  let lunchMin=entry&&entry.lunchMin!=null?entry.lunchMin:30;
+  let travelMin=entry&&entry.travelMin!=null?entry.travelMin:0;
+  let armed=false;
+  const recentAddr=recentAddresses();
+  const sc=$("scrim");sc.hidden=false;
+
+  function showsHours(){const emp=empById(employeeId);return emp&&(emp.payType==="hour"||emp.isSelf)}
+  function payLabel(emp){return emp.payType==="day"?"Ставка: "+money(emp.rate)+"/день":emp.payType==="hour"?"Ставка: "+money(emp.rate)+"/час":"Без оплаты"}
+
+  sc.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Рабочий день">
+    <h3>${edit?"Изменить запись":"Новая запись"}</h3>
+    <div class="chips" id="fEmp">${employeesSorted().map(e=>`<button data-e="${e.id}" aria-pressed="${e.id===employeeId}">${esc(empLabel(e))}</button>`).join("")}</div>
+    <p class="ratehint" id="ratehint"></p>
+    <label class="field">Дата<input id="fDate" type="date" value="${date}"></label>
+    <label class="field">Адрес объекта<input id="fAddr" maxlength="120" placeholder="Например, Calle Mayor 12" value="${entry?esc(entry.address||""):""}"></label>
+    ${recentAddr.length?`<div class="chips" id="fAddrChips">${recentAddr.map(a=>`<button type="button" data-a="${esc(a)}">${esc(a)}</button>`).join("")}</div>`:""}
+    <label class="field">Описание работ<textarea id="fDesc" rows="2" maxlength="300" placeholder="Что сделано">${entry?esc(entry.desc||""):""}</textarea></label>
+    <div class="field" id="hoursWrap">Часы
+      <div class="seg" id="hSeg"><button data-m="manual" aria-pressed="${hoursMode==="manual"}">Вручную</button><button data-m="clock" aria-pressed="${hoursMode==="clock"}">Приход / уход</button></div>
+      <div id="hBody"></div>
+    </div>
+    <label class="field">Время в дороге, мин<input id="fTravel" type="number" min="0" step="5" value="${travelMin}"></label>
+    <p class="earnline" id="fEarn" hidden></p>
+    <p class="err" id="fErr"></p>
+    <div class="actions">${edit?`<button class="ghost danger" id="fDel">Удалить</button>`:""}<button class="ghost" id="fCancel">Отмена</button><button class="primary" id="fSave">Сохранить</button></div>
+  </div>`;
+
+  function computeClockHours(){
+    const inEl=$("fIn"), outEl=$("fOut"), lunchEl=$("fLunch");
+    if(!inEl||!outEl||!inEl.value||!outEl.value) return 0;
+    const lunch=parseNum(lunchEl?lunchEl.value:0);
+    const [ih,im]=inEl.value.split(":").map(Number), [oh,om]=outEl.value.split(":").map(Number);
+    let diff=(oh*60+om)-(ih*60+im); if(diff<0) diff+=24*60;
+    diff-=lunch; return Math.max(0,diff)/60;
+  }
+  function currentHours(){
+    if(!showsHours()) return 0;
+    if(hoursMode==="manual"){const el=$("fHours"); return el?parseNum(el.value):0}
+    return computeClockHours();
+  }
+  function recomputeEarn(){
+    if($("hLine")) $("hLine").textContent="Итого: "+fmtHours(computeClockHours());
+    const emp=empById(employeeId);
+    const fe=$("fEarn");
+    if(emp&&emp.payType!=="none"){
+      const h=currentHours();
+      const amt=emp.payType==="day"?emp.rate:Math.round(emp.rate*h);
+      fe.hidden=false; fe.textContent="Начислено: "+money(amt);
+    }else if(fe){fe.hidden=true}
+  }
+  function renderHoursBody(){
+    $("hBody").innerHTML=hoursMode==="manual"
+      ?`<input id="fHours" class="num" inputmode="decimal" placeholder="8" value="${hours!=null?String(hours).replace(".",","):""}">`
+      :`<div class="timepair"><input id="fIn" type="time" value="${timeIn}"><span>—</span><input id="fOut" type="time" value="${timeOut}"></div>
+        <label class="field">Обед/перерыв, мин<input id="fLunch" type="number" min="0" step="5" value="${lunchMin}"></label>
+        <span class="ivaline num" id="hLine"></span>`;
+    const inputs=hoursMode==="manual"?[$("fHours")]:[$("fIn"),$("fOut"),$("fLunch")];
+    inputs.forEach(el=>{if(el) el.addEventListener("input",recomputeEarn)});
+    recomputeEarn();
+  }
+  function updateVisibility(){
+    const emp=empById(employeeId);
+    $("ratehint").textContent=emp?payLabel(emp):"";
+    $("hoursWrap").hidden=!showsHours();
+    recomputeEarn();
+  }
+
+  $("fEmp").onclick=e=>{const b=e.target.closest("button"); if(!b) return; employeeId=b.dataset.e;
+    [...$("fEmp").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.e===employeeId)); updateVisibility()};
+  if($("fAddrChips")) $("fAddrChips").onclick=e=>{const b=e.target.closest("button"); if(b) $("fAddr").value=b.dataset.a};
+  $("hSeg").onclick=e=>{const b=e.target.closest("button"); if(!b) return; hoursMode=b.dataset.m;
+    [...$("hSeg").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.m===hoursMode)); renderHoursBody()};
+  $("fCancel").onclick=close; sc.onclick=e=>{if(e.target===sc) close()};
+  if(edit) $("fDel").onclick=()=>{
+    if(!armed){armed=true;$("fDel").textContent="Точно удалить?";return}
+    db.entries=db.entries.filter(x=>x.id!==entry.id); save(); close(); render(); toast("Удалено");
+  };
+  $("fSave").onclick=()=>{
+    const emp=empById(employeeId);
+    const d=$("fDate").value||today();
+    const addr=$("fAddr").value.trim();
+    const desc=$("fDesc").value.trim();
+    const travel=Math.max(0,Math.round(parseNum($("fTravel").value)));
+    let hrs=null,hMode=null,tIn=null,tOut=null,lunch=null;
+    if(showsHours()){
+      hMode=hoursMode;
+      if(hoursMode==="manual"){hrs=parseNum($("fHours").value)}
+      else{tIn=$("fIn").value;tOut=$("fOut").value;lunch=Math.max(0,Math.round(parseNum($("fLunch").value)));hrs=computeClockHours()}
+      if(emp.payType==="hour"&&!(hrs>0)){$("fErr").textContent="Укажите часы работы";return}
+    }
+    const rec={id:entry?entry.id:uid(),employeeId,date:d,address:addr,desc,hours:hrs,hoursMode:hMode,timeIn:tIn,timeOut:tOut,lunchMin:lunch,travelMin:travel};
+    if(db.example&&!edit){db.entries=[];db.payments=[];db.example=false}
+    if(edit) db.entries=db.entries.map(x=>x.id===entry.id?rec:x); else db.entries.push(rec);
+    save(); close();
+    cur=new Date(d+"T12:00"); cur.setDate(1); selectedDay=null; render();
+    toast(edit?"Сохранено":"Добавлено");
+  };
+
+  renderHoursBody();
+  updateVisibility();
+}
+
+function openPaySheet(payment){
+  const edit=!!payment;
+  let employeeId=payment?payment.employeeId:(db.filter!=="all"?db.filter:(employeesSorted().find(e=>!e.isSelf)||employeesSorted()[0]||{id:"self"}).id);
+  let armed=false;
+  const sc=$("scrim");sc.hidden=false;
+  sc.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Оплата">
+    <h3>${edit?"Изменить оплату":"Новая оплата"}</h3>
+    <div class="chips" id="pEmp">${employeesSorted().map(e=>`<button data-e="${e.id}" aria-pressed="${e.id===employeeId}">${esc(empLabel(e))}</button>`).join("")}</div>
+    <label class="amountin"><input id="pAmt" class="num" inputmode="decimal" placeholder="0,00" value="${payment?(payment.amount/100).toFixed(2).replace(".",","):""}"><span>€</span></label>
+    <label class="field">Дата<input id="pDate" type="date" value="${payment?payment.date:today()}"></label>
+    <label class="field">Комментарий<input id="pNote" maxlength="120" placeholder="Например, аванс" value="${payment?esc(payment.note||""):""}"></label>
+    <p class="err" id="pErr"></p>
+    <div class="actions">${edit?`<button class="ghost danger" id="pDel">Удалить</button>`:""}<button class="ghost" id="pCancel">Отмена</button><button class="primary" id="pSave">Сохранить</button></div>
+  </div>`;
+  $("pEmp").onclick=e=>{const b=e.target.closest("button"); if(!b) return; employeeId=b.dataset.e;
+    [...$("pEmp").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.e===employeeId))};
+  $("pCancel").onclick=close; sc.onclick=e=>{if(e.target===sc) close()};
+  if(edit) $("pDel").onclick=()=>{
+    if(!armed){armed=true;$("pDel").textContent="Точно удалить?";return}
+    db.payments=db.payments.filter(x=>x.id!==payment.id); save(); close(); render(); toast("Удалено");
+  };
+  $("pSave").onclick=()=>{
+    const v=parseNum($("pAmt").value);
+    if(!(v>0)){$("pErr").textContent="Введите сумму больше нуля";return}
+    const d=$("pDate").value||today();
+    const rec={id:payment?payment.id:uid(),employeeId,date:d,amount:Math.round(v*100),note:$("pNote").value.trim()};
+    if(db.example&&!edit){db.entries=[];db.payments=[];db.example=false}
+    if(edit) db.payments=db.payments.map(x=>x.id===payment.id?rec:x); else db.payments.push(rec);
+    save(); close();
+    cur=new Date(d+"T12:00"); cur.setDate(1); selectedDay=null; render();
+    toast(edit?"Сохранено":"Добавлено");
+  };
+}
+
+function openEmpSheet(emp){
+  const edit=!!emp;
+  const isSelf=emp?!!emp.isSelf:false;
+  let name=emp?emp.name:"";
+  let payType=emp?emp.payType:"day";
+  let rate=emp?emp.rate:0;
+  let armed=false;
+  const sc=$("scrim");sc.hidden=false;
+  function paint(){
+    sc.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Сотрудник">
+      <h3>${edit?"Сотрудник":"Новый сотрудник"}</h3>
+      <label class="field">Имя<input id="eName" maxlength="40" placeholder="Например, Хуан" value="${esc(name)}"></label>
+      <div class="field">Оплата
+        <div class="seg3" id="ePay">
+          <button data-p="day" aria-pressed="${payType==="day"}">За день</button>
+          <button data-p="hour" aria-pressed="${payType==="hour"}">За час</button>
+          <button data-p="none" aria-pressed="${payType==="none"}">Без оплаты</button>
+        </div>
+      </div>
+      ${payType!=="none"?`<label class="amountin"><input id="eRate" class="num" inputmode="decimal" placeholder="0,00" value="${rate?(rate/100).toFixed(2).replace(".",","):""}"><span>€/${payType==="day"?"день":"час"}</span></label>`:""}
+      <p class="err" id="eErr"></p>
+      <div class="actions">${edit&&!isSelf?`<button class="ghost danger" id="eDel">Удалить</button>`:""}<button class="ghost" id="eCancel">Отмена</button><button class="primary" id="eSave">Сохранить</button></div>
+    </div>`;
+    $("ePay").onclick=e=>{
+      const b=e.target.closest("button"); if(!b) return;
+      name=$("eName").value;
+      const rEl=$("eRate"); if(rEl) rate=Math.round(parseNum(rEl.value)*100);
+      payType=b.dataset.p; paint();
+    };
+    $("eCancel").onclick=close; sc.onclick=ev=>{if(ev.target===sc) close()};
+    if(edit&&!isSelf) $("eDel").onclick=()=>{
+      if(!armed){armed=true;$("eDel").textContent="Точно удалить?";return}
+      db.employees=db.employees.filter(x=>x.id!==emp.id);
+      db.entries=db.entries.filter(x=>x.employeeId!==emp.id);
+      db.payments=db.payments.filter(x=>x.employeeId!==emp.id);
+      if(db.filter===emp.id) db.filter="all";
+      save(); close(); render(); toast("Сотрудник удалён");
+    };
+    $("eSave").onclick=()=>{
+      const nm=$("eName").value.trim();
+      if(!nm){$("eErr").textContent="Введите имя";return}
+      let rt=0;
+      if(payType!=="none"){
+        const v=parseNum($("eRate").value);
+        if(!(v>0)){$("eErr").textContent="Укажите ставку больше нуля";return}
+        rt=Math.round(v*100);
+      }
+      const rec={id:emp?emp.id:uid(),name:nm,payType,rate:rt,isSelf,color:emp?emp.color:nextColor()};
+      if(edit) db.employees=db.employees.map(x=>x.id===emp.id?rec:x); else db.employees.push(rec);
+      save(); close(); render(); toast(edit?"Сохранено":"Добавлен");
+    };
+  }
+  paint();
+}
+
+function toCSV(){
+  const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  const n=c=>(c/100).toFixed(2).replace(".",",");
+  let out="Тип;Сотрудник;Дата;Адрес;Описание;Часы;Обед(мин);Дорога(мин);Начислено;Оплачено\n";
+  db.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+    const emp=empById(e.employeeId); if(!emp) return;
+    out+=["Работа",q(empLabel(emp)),e.date,q(e.address||""),q(e.desc||""),e.hours!=null?String(e.hours).replace(".",","):"",e.lunchMin!=null?e.lunchMin:"",e.travelMin||0,n(earnings(emp,e)),""].join(";")+"\n";
+  });
+  db.payments.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(p=>{
+    const emp=empById(p.employeeId);
+    out+=["Оплата",q(emp?empLabel(emp):""),p.date,"",q(p.note||""),"","","","",n(p.amount)].join(";")+"\n";
+  });
+  return out;
+}
+function showText(txt){
+  const sc=$("scrim");sc.hidden=false;
+  sc.innerHTML=`<div class="sheet"><h3>Резервная копия</h3><label class="field">Выделите и скопируйте<textarea id="bk" rows="6" readonly>${esc(txt)}</textarea></label><div class="actions"><button class="primary" id="ok">Готово</button></div></div>`;
+  $("bk").select(); $("ok").onclick=close;
+}
+
+$("prev").onclick=()=>{cur.setMonth(cur.getMonth()-1); selectedDay=null; render()};
+$("next").onclick=()=>{cur.setMonth(cur.getMonth()+1); selectedDay=null; render()};
+$("empTabs").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b) return; db.filter=b.dataset.f; selectedDay=null; save(); render()});
+$("calgrid").addEventListener("click",e=>{const b=e.target.closest("button.calcell"); if(!b) return; const d=b.dataset.date; selectedDay=selectedDay===d?null:d; render()});
+$("clearDay").onclick=()=>{selectedDay=null; render()};
+$("clearex").onclick=()=>{db={employees:[defaultSelf()],entries:[],payments:[],example:false,filter:"all"}; save(); render(); toast("Примеры удалены")};
+$("list").addEventListener("click",e=>{const b=e.target.closest("[data-kind]"); if(!b) return;
+  if(b.dataset.kind==="entry") openEntrySheet(db.entries.find(x=>x.id===b.dataset.id));
+  else openPaySheet(db.payments.find(x=>x.id===b.dataset.id));
+});
+$("empList").addEventListener("click",e=>{const b=e.target.closest("button.emprow"); if(!b) return; openEmpSheet(empById(b.dataset.id))});
+$("addEmp").onclick=()=>openEmpSheet(null);
+$("add").onclick=openAddChooser;
+
+$("csv").onclick=()=>{
+  try{const b=new Blob(["﻿"+toCSV()],{type:"text/csv"}); const a=document.createElement("a");
+    a.href=URL.createObjectURL(b); a.download="tabel-"+today()+".csv"; document.body.appendChild(a); a.click(); a.remove(); toast("CSV готов")}
+  catch(e){toast("Скачивание недоступно, используйте копирование")}
+};
+$("copy").onclick=()=>{
+  const txt=JSON.stringify({tabel:1,employees:db.employees,entries:db.entries,payments:db.payments});
+  navigator.clipboard.writeText(txt).then(()=>toast("Копия в буфере обмена — вставьте её в Заметки")).catch(()=>showText(txt));
+};
+$("imp").onclick=()=>{
+  const sc=$("scrim");sc.hidden=false;
+  sc.innerHTML=`<div class="sheet"><h3>Восстановить из копии</h3><label class="field">Вставьте текст резервной копии<textarea id="rin" rows="6"></textarea></label><p class="err" id="rErr"></p><div class="actions"><button class="ghost" id="rc">Отмена</button><button class="primary" id="rgo">Восстановить</button></div></div>`;
+  $("rc").onclick=close;
+  $("rgo").onclick=()=>{
+    try{
+      const o=JSON.parse($("rin").value);
+      if(!Array.isArray(o.entries)||!Array.isArray(o.employees)) throw 0;
+      db={employees:o.employees,entries:o.entries,payments:Array.isArray(o.payments)?o.payments:[],example:false,filter:"all"};
+      if(!db.employees.find(e=>e.isSelf)) db.employees.unshift(defaultSelf());
+      save(); close(); render(); toast("Восстановлено: "+db.entries.length+" записей");
+    }catch(e){$("rErr").textContent="Текст не похож на резервную копию Табеля. Скопируйте его целиком."}
+  };
+};
+let wipeArmed=false;
+$("wipe").onclick=()=>{
+  if(!wipeArmed){wipeArmed=true;$("wipe").textContent="Нажмите ещё раз, чтобы удалить всё";setTimeout(()=>{wipeArmed=false;$("wipe").textContent="Удалить всё"},3000);return}
+  db={employees:[defaultSelf()],entries:[],payments:[],example:false,filter:"all"}; save(); render(); toast("Все записи удалены"); wipeArmed=false; $("wipe").textContent="Удалить всё";
+};
+
+render();
+try{if("serviceWorker" in navigator&&location.protocol==="https:"&&!/claude/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
+})();
+</script>
+
+</body>
+</html>
