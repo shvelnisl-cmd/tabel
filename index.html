@@ -229,11 +229,11 @@ function seed(){
   const e2={id:uid(),name:"Мигель",payType:"hour",rate:1200,isSelf:false,color:PALETTE[1]};
   const d=new Date(),y=d.getFullYear(),m=d.getMonth()+1,D=n=>y+"-"+pad(m)+"-"+pad(Math.max(1,Math.min(n,d.getDate())));
   const entries=[
-    {id:uid(),employeeId:e1.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Демонтаж старой плитки",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20},
-    {id:uid(),employeeId:e1.id,date:D(2),address:"Calle Mayor 12, Elche",desc:"Укладка плитки, ванная",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20},
-    {id:uid(),employeeId:e2.id,date:D(1),address:"Av. del Mar 5, San Juan",desc:"Электрика, разводка",hours:7.5,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:15},
-    {id:uid(),employeeId:e2.id,date:D(3),address:"Av. del Mar 5, San Juan",desc:"Розетки и щиток",hours:8,hoursMode:"clock",timeIn:"08:00",timeOut:"17:00",lunchMin:30,travelMin:15},
-    {id:uid(),employeeId:self.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Закупка материалов, контроль работ",hours:3,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:40}
+    {id:uid(),employeeId:e1.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Демонтаж старой плитки",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20,amount:8000},
+    {id:uid(),employeeId:e1.id,date:D(2),address:"Calle Mayor 12, Elche",desc:"Укладка плитки, ванная",hours:null,hoursMode:null,timeIn:null,timeOut:null,lunchMin:null,travelMin:20,amount:8000},
+    {id:uid(),employeeId:e2.id,date:D(1),address:"Av. del Mar 5, San Juan",desc:"Электрика, разводка",hours:7.5,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:15,amount:9000},
+    {id:uid(),employeeId:e2.id,date:D(3),address:"Av. del Mar 5, San Juan",desc:"Розетки и щиток",hours:8.5,hoursMode:"clock",timeIn:"08:00",timeOut:"17:00",lunchMin:30,travelMin:15,amount:10200},
+    {id:uid(),employeeId:self.id,date:D(1),address:"Calle Mayor 12, Elche",desc:"Закупка материалов, контроль работ",hours:3,hoursMode:"manual",timeIn:null,timeOut:null,lunchMin:null,travelMin:40,amount:null}
   ];
   const payments=[{id:uid(),employeeId:e1.id,date:D(2),amount:8000,note:"Аванс"}];
   db={employees:[self,e1,e2],entries,payments,example:true,filter:"all"};
@@ -248,7 +248,7 @@ const td=today();
 function empById(id){return db.employees.find(e=>e.id===id)}
 function employeesSorted(){const self=db.employees.find(e=>e.isSelf);const others=db.employees.filter(e=>!e.isSelf);return self?[self,...others]:others}
 function empLabel(e){return e.isSelf?"Я":e.name}
-function earnings(emp,entry){if(!emp) return 0; if(emp.payType==="day") return emp.rate; if(emp.payType==="hour") return Math.round(emp.rate*(entry.hours||0)); return 0}
+function earnings(emp,entry){if(!emp) return 0; if(entry.amount!=null) return entry.amount; if(emp.payType==="day") return emp.rate; if(emp.payType==="hour") return Math.round(emp.rate*(entry.hours||0)); return 0}
 function allAccrued(id){const emp=empById(id); if(!emp) return 0; return db.entries.filter(e=>e.employeeId===id).reduce((s,e)=>s+earnings(emp,e),0)}
 function allPaid(id){return db.payments.filter(p=>p.employeeId===id).reduce((s,p)=>s+p.amount,0)}
 function monthEntries(){return db.entries.filter(e=>e.date.slice(0,7)===ym())}
@@ -350,7 +350,7 @@ function renderList(){
       const emp=empById(e.employeeId); if(!emp) return "";
       const title=db.filter==="all"?esc(empLabel(emp)):(e.address?esc(e.address):"Без адреса");
       const sub1=db.filter==="all"?(e.address?esc(e.address):"Без адреса"):(e.desc?esc(e.desc.slice(0,70)):"");
-      const hourBit=emp.payType==="day"?"":(e.hours?fmtHours(e.hours):"");
+      const hourBit=e.hours?fmtHours(e.hours):"";
       const travelBit=e.travelMin?"дорога "+fmtMin(e.travelMin):"";
       const sub2=[hourBit,travelBit].filter(Boolean).join(" · ");
       const amt=emp.payType!=="none"?money(earnings(emp,e)):(e.hours?fmtHours(e.hours):"—");
@@ -406,12 +406,13 @@ function openEntrySheet(entry){
   let timeOut=entry&&entry.timeOut?entry.timeOut:"16:00";
   let lunchMin=entry&&entry.lunchMin!=null?entry.lunchMin:30;
   let travelMin=entry&&entry.travelMin!=null?entry.travelMin:0;
+  let amountTouched=edit;
   let armed=false;
   const recentAddr=recentAddresses();
   const sc=$("scrim");sc.hidden=false;
 
-  function showsHours(){const emp=empById(employeeId);return emp&&(emp.payType==="hour"||emp.isSelf)}
   function payLabel(emp){return emp.payType==="day"?"Ставка: "+money(emp.rate)+"/день":emp.payType==="hour"?"Ставка: "+money(emp.rate)+"/час":"Без оплаты"}
+  const startAmt=edit?earnings(empById(employeeId),entry):0;
 
   sc.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Рабочий день">
     <h3>${edit?"Изменить запись":"Новая запись"}</h3>
@@ -421,12 +422,14 @@ function openEntrySheet(entry){
     <label class="field">Адрес объекта<input id="fAddr" maxlength="120" placeholder="Например, Calle Mayor 12" value="${entry?esc(entry.address||""):""}"></label>
     ${recentAddr.length?`<div class="chips" id="fAddrChips">${recentAddr.map(a=>`<button type="button" data-a="${esc(a)}">${esc(a)}</button>`).join("")}</div>`:""}
     <label class="field">Описание работ<textarea id="fDesc" rows="2" maxlength="300" placeholder="Что сделано">${entry?esc(entry.desc||""):""}</textarea></label>
-    <div class="field" id="hoursWrap">Часы
+    <div class="field">Часы
       <div class="seg" id="hSeg"><button data-m="manual" aria-pressed="${hoursMode==="manual"}">Вручную</button><button data-m="clock" aria-pressed="${hoursMode==="clock"}">Приход / уход</button></div>
       <div id="hBody"></div>
     </div>
     <label class="field">Время в дороге, мин<input id="fTravel" type="number" min="0" step="5" value="${travelMin}"></label>
-    <p class="earnline" id="fEarn" hidden></p>
+    <div class="field" id="amtWrap">Сумма к оплате
+      <label class="amountin"><input id="fAmt" class="num" inputmode="decimal" placeholder="0,00" value="${startAmt?(startAmt/100).toFixed(2).replace(".",","):""}"><span>€</span></label>
+    </div>
     <p class="err" id="fErr"></p>
     <div class="actions">${edit?`<button class="ghost danger" id="fDel">Удалить</button>`:""}<button class="ghost" id="fCancel">Отмена</button><button class="primary" id="fSave">Сохранить</button></div>
   </div>`;
@@ -440,19 +443,23 @@ function openEntrySheet(entry){
     diff-=lunch; return Math.max(0,diff)/60;
   }
   function currentHours(){
-    if(!showsHours()) return 0;
     if(hoursMode==="manual"){const el=$("fHours"); return el?parseNum(el.value):0}
     return computeClockHours();
   }
+  function suggestedAmount(emp){
+    if(!emp||emp.payType==="none") return 0;
+    if(emp.payType==="day") return emp.rate;
+    return Math.round(emp.rate*currentHours());
+  }
+  function applySuggestion(){
+    const emp=empById(employeeId);
+    if(!emp||emp.payType==="none"||amountTouched) return;
+    const amt=suggestedAmount(emp);
+    $("fAmt").value=amt?(amt/100).toFixed(2).replace(".",","):"";
+  }
   function recomputeEarn(){
     if($("hLine")) $("hLine").textContent="Итого: "+fmtHours(computeClockHours());
-    const emp=empById(employeeId);
-    const fe=$("fEarn");
-    if(emp&&emp.payType!=="none"){
-      const h=currentHours();
-      const amt=emp.payType==="day"?emp.rate:Math.round(emp.rate*h);
-      fe.hidden=false; fe.textContent="Начислено: "+money(amt);
-    }else if(fe){fe.hidden=true}
+    applySuggestion();
   }
   function renderHoursBody(){
     $("hBody").innerHTML=hoursMode==="manual"
@@ -467,10 +474,11 @@ function openEntrySheet(entry){
   function updateVisibility(){
     const emp=empById(employeeId);
     $("ratehint").textContent=emp?payLabel(emp):"";
-    $("hoursWrap").hidden=!showsHours();
-    recomputeEarn();
+    $("amtWrap").hidden=!emp||emp.payType==="none";
+    applySuggestion();
   }
 
+  $("fAmt").addEventListener("input",()=>{amountTouched=true});
   $("fEmp").onclick=e=>{const b=e.target.closest("button"); if(!b) return; employeeId=b.dataset.e;
     [...$("fEmp").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.e===employeeId)); updateVisibility()};
   if($("fAddrChips")) $("fAddrChips").onclick=e=>{const b=e.target.closest("button"); if(b) $("fAddr").value=b.dataset.a};
@@ -487,14 +495,12 @@ function openEntrySheet(entry){
     const addr=$("fAddr").value.trim();
     const desc=$("fDesc").value.trim();
     const travel=Math.max(0,Math.round(parseNum($("fTravel").value)));
-    let hrs=null,hMode=null,tIn=null,tOut=null,lunch=null;
-    if(showsHours()){
-      hMode=hoursMode;
-      if(hoursMode==="manual"){hrs=parseNum($("fHours").value)}
-      else{tIn=$("fIn").value;tOut=$("fOut").value;lunch=Math.max(0,Math.round(parseNum($("fLunch").value)));hrs=computeClockHours()}
-      if(emp.payType==="hour"&&!(hrs>0)){$("fErr").textContent="Укажите часы работы";return}
-    }
-    const rec={id:entry?entry.id:uid(),employeeId,date:d,address:addr,desc,hours:hrs,hoursMode:hMode,timeIn:tIn,timeOut:tOut,lunchMin:lunch,travelMin:travel};
+    const hMode=hoursMode;
+    let hrs=null,tIn=null,tOut=null,lunch=null;
+    if(hoursMode==="manual"){const v=$("fHours").value; hrs=v?parseNum(v):null}
+    else{tIn=$("fIn").value;tOut=$("fOut").value;lunch=Math.max(0,Math.round(parseNum($("fLunch").value)));hrs=computeClockHours()}
+    const amount=emp.payType!=="none"?Math.round(parseNum($("fAmt").value)*100):null;
+    const rec={id:entry?entry.id:uid(),employeeId,date:d,address:addr,desc,hours:hrs,hoursMode:hMode,timeIn:tIn,timeOut:tOut,lunchMin:lunch,travelMin:travel,amount};
     if(db.example&&!edit){db.entries=[];db.payments=[];db.example=false}
     if(edit) db.entries=db.entries.map(x=>x.id===entry.id?rec:x); else db.entries.push(rec);
     save(); close();
